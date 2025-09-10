@@ -1,7 +1,12 @@
 import { driver } from "../config/db.js";
 import { v4 as uuidv4 } from "uuid";
 
-// Crear ruta con estaciones y sus relaciones
+/**
+ * Crea una nueva ruta en la base de datos
+ * @param {*} param0 Datos de la ruta
+ * @returns La ruta creada
+ */
+
 export async function createRoute({
   origin,
   destination,
@@ -48,11 +53,14 @@ export async function createRoute({
   }
 }
 
+/**
+ * Lista todas las rutas activas
+ * @returns Lista todas las rutas activas
+ */
 export async function getRoutes() {
   const session = driver.session();
   try {
     const query = `
-      MATCH (r:Route {isActive: true})
       OPTIONAL MATCH (r)-[:STARTS_AT]->(o:Station)
       OPTIONAL MATCH (r)-[:ENDS_AT]->(d:Station)
       OPTIONAL MATCH (r)-[:STOPS_AT]->(s:Station)
@@ -75,6 +83,70 @@ export async function getRoutes() {
       stops: record.get("stops"),
       isActive: record.get("isActive"),
     }));
+  } finally {
+    await session.close();
+  }
+}
+
+/**
+ * Obtiene una ruta por su ID
+ * @param {*} id ID de la ruta
+ * @returns La ruta con el ID especificado o null si no existe
+ */
+export async function getRouteById(id) {
+  const session = driver.session();
+  try {
+    const query = `
+      MATCH (r:Route {id: $id, isActive: true})
+      OPTIONAL MATCH (r)-[:STARTS_AT]->(o:Station)
+      OPTIONAL MATCH (r)-[:ENDS_AT]->(d:Station)
+      OPTIONAL MATCH (r)-[:STOPS_AT]->(s:Station)
+      RETURN r.id AS id,
+             r.startTime AS startTime,
+             r.endTime AS endTime,
+             r.isActive AS isActive,
+             o.name AS origin,
+             d.name AS destination,
+             collect(s.name) AS stops
+    `;
+    const result = await session.run(query, { id });
+
+    if (result.records.length === 0) return null;
+
+    const record = result.records[0];
+    return {
+      id: record.get("id"),
+      origin: record.get("origin"),
+      destination: record.get("destination"),
+      startTime: record.get("startTime"),
+      endTime: record.get("endTime"),
+    };
+  } finally {
+    await session.close();
+  }
+}
+
+/**
+ * Elimina una ruta SOFTDELETE, es decir, cambia su estado a inactivo
+ * @param {*} id ID de la ruta
+ * @returns La ruta eliminada o null si no existe
+ */
+export async function softDeleteRoute(id) {
+  const session = driver.session();
+  try {
+    const query = `
+      MATCH (r:Route {id: $id})
+      SET r.isActive = false
+      RETURN r.id AS id, r.isActive AS isActive
+    `;
+    const result = await session.run(query, { id });
+
+    if (result.records.length === 0) return null;
+
+    return {
+      id: result.records[0].get("id"),
+      isActive: result.records[0].get("isActive"),
+    };
   } finally {
     await session.close();
   }

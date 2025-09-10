@@ -1,6 +1,10 @@
 import express from "express";
-import { addRoute } from "../services/route.service.js";
-import { listRoutes } from "../services/route.service.js";
+import {
+  addRoute,
+  listRoutes,
+  findRouteById,
+  deleteRoute
+} from "../services/route.service.js";
 
 const router = express.Router();
 
@@ -22,7 +26,7 @@ router.post("/", async (req, res) => {
       stops,
       startTime,
       endTime,
-      isActive: isActive ?? true, // por defecto activa
+      isActive: isActive ?? true,
     });
 
     res.status(201).json(newRoute);
@@ -45,6 +49,38 @@ router.get("/", async (req, res) => {
     res
       .status(500)
       .json({ error: "Error listando rutas", details: err.message });
+  }
+});
+
+/**
+ * Obtener ruta por ID
+ */
+router.get("/:id", async (req, res) => {
+  try {
+    const route = await findRouteById(req.params.id);
+    if (!route) {
+      return res.status(404).json({ error: "Ruta no encontrada" });
+    }
+    res.json(route);
+  } catch (err) {
+    res
+      .status(500)
+      .json({ error: "Error obteniendo la ruta", details: err.message });
+  }
+});
+
+/**
+ * Eliminar (soft delete) una ruta por ID
+ */
+router.delete("/:id", async (req, res) => {
+  try {
+    const deletedRoute = await deleteRoute(req.params.id);
+    if (!deletedRoute) {
+      return res.status(404).json({ error: "Ruta no encontrada" });
+    }
+    res.json({ message: "Ruta eliminada (soft delete)", route: deletedRoute });
+  } catch (err) {
+    res.status(500).json({ error: "Error eliminando ruta", details: err.message });
   }
 });
 
