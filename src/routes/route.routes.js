@@ -3,7 +3,8 @@ import {
   addRoute,
   listRoutes,
   findRouteById,
-  deleteRoute
+  editRoute,
+  deleteRoute,
 } from "../services/route.service.js";
 
 const router = express.Router();
@@ -31,10 +32,7 @@ router.post("/", async (req, res) => {
 
     res.status(201).json(newRoute);
   } catch (err) {
-    console.error(err);
-    res
-      .status(500)
-      .json({ error: "Error creando la ruta", details: err.message });
+    res.status(400).json({ error: err.message });
   }
 });
 
@@ -44,6 +42,10 @@ router.post("/", async (req, res) => {
 router.get("/", async (req, res) => {
   try {
     const routes = await listRoutes();
+    system.log(routes);
+    if (routes.length === 0) {
+      return res.status(404).json({ error: "No hay rutas disponibles" });
+    }
     res.json(routes);
   } catch (err) {
     res
@@ -70,6 +72,46 @@ router.get("/:id", async (req, res) => {
 });
 
 /**
+ * Actualizar una ruta por ID
+ */
+router.patch("/:id", async (req, res) => {
+  try {
+    const { origin, destination, startTime, endTime, stops, isActive } =
+      req.body;
+
+    if (
+      !origin &&
+      !destination &&
+      !startTime &&
+      !endTime &&
+      !stops &&
+      isActive === undefined
+    ) {
+      return res
+        .status(400)
+        .json({ error: "No se proporcionaron campos para actualizar" });
+    }
+
+    const updatedRoute = await editRoute(req.params.id, {
+      origin,
+      destination,
+      startTime,
+      endTime,
+      stops: stops || [],
+      isActive: isActive ?? true,
+    });
+
+    if (!updatedRoute) {
+      return res.status(404).json({ error: "Ruta no encontrada" });
+    }
+
+    res.json(updatedRoute);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+/**
  * Eliminar (soft delete) una ruta por ID
  */
 router.delete("/:id", async (req, res) => {
@@ -80,7 +122,9 @@ router.delete("/:id", async (req, res) => {
     }
     res.json({ message: "Ruta eliminada (soft delete)", route: deletedRoute });
   } catch (err) {
-    res.status(500).json({ error: "Error eliminando ruta", details: err.message });
+    res
+      .status(500)
+      .json({ error: "Error eliminando ruta", details: err.message });
   }
 });
 
