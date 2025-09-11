@@ -93,6 +93,7 @@ export async function getRoutes() {
   const session = driver.session();
   try {
     const query = `
+      MATCH (r:Route {isActive: true})
       OPTIONAL MATCH (r)-[:STARTS_AT]->(o:Station)
       OPTIONAL MATCH (r)-[:ENDS_AT]->(d:Station)
       OPTIONAL MATCH (r)-[:STOPS_AT]->(s:Station)
@@ -105,8 +106,6 @@ export async function getRoutes() {
              collect(s.name) AS stops
     `;
     const result = await session.run(query);
-
-    if (result.records.length === 0) return [];
 
     return result.records.map((record) => ({
       id: record.get("id"),
@@ -121,7 +120,6 @@ export async function getRoutes() {
     await session.close();
   }
 }
-
 /**
  * Obtiene una ruta por su ID
  * @param {*} id ID de la ruta

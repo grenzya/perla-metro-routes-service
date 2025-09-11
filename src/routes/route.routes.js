@@ -42,10 +42,6 @@ router.post("/", async (req, res) => {
 router.get("/", async (req, res) => {
   try {
     const routes = await listRoutes();
-    system.log(routes);
-    if (routes.length === 0) {
-      return res.status(404).json({ error: "No hay rutas disponibles" });
-    }
     res.json(routes);
   } catch (err) {
     res
