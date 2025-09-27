@@ -1,5 +1,6 @@
 import { driver } from "../config/db.js";
 import { v4 as uuidv4 } from "uuid";
+import { isValidTimeFormat } from "../utils/time.utils.js";
 
 /**
  * Crea una nueva ruta en la base de datos
@@ -14,6 +15,12 @@ export async function createRoute({
   endTime,
   isActive,
 }) {
+  if (!isValidTimeFormat(startTime) || !isValidTimeFormat(endTime)) {
+    throw new Error(
+      "Los horarios deben estar en formato HH:mm entre 00:00 y 23:59"
+    );
+  }
+
   if (origin === destination) {
     throw new Error("La estación de origen y destino no pueden ser iguales");
   }
@@ -33,7 +40,7 @@ export async function createRoute({
       OPTIONAL MATCH (r)-[:STARTS_AT]->(o:Station)
       OPTIONAL MATCH (r)-[:ENDS_AT]->(d:Station)
       OPTIONAL MATCH (r)-[:STOPS_AT]->(s:Station)
-      WHERE o.name = $origin AND d.name = $destination AND r.startTime = $startTime AND r.endTime = $endTime
+      WHERE o.name = $origin AND d.name = $destination
       WITH r, collect(s.name) AS existingStops
       WHERE existingStops = $stops
       RETURN r LIMIT 1
@@ -166,37 +173,11 @@ export async function getRouteById(id) {
  */
 export async function updateRoute(
   id,
-  { origin, destination, startTime, endTime, stops, isActive }
+  { origin, destination, startTime, endTime, stops }
 ) {
   const session = driver.session();
   try {
-    // 1. Traer la ruta actual para tener valores por defecto
-    const currentQuery = `
-      MATCH (r:Route {id: $id})
-      OPTIONAL MATCH (r)-[:STARTS_AT]->(o:Station)
-      OPTIONAL MATCH (r)-[:ENDS_AT]->(d:Station)
-      OPTIONAL MATCH (r)-[:STOPS_AT]->(s:Station)
-      RETURN r.startTime AS startTime,
-             r.endTime AS endTime,
-             r.isActive AS isActive,
-             o.name AS origin,
-             d.name AS destination,
-             collect(s.name) AS stops
-    `;
-    const currentResult = await session.run(currentQuery, { id });
-    if (currentResult.records.length === 0) {
-      await session.close();
-      return null;
-    }
-    const current = currentResult.records[0];
-
-    origin = origin ?? current.get("origin");
-    destination = destination ?? current.get("destination");
-    startTime = startTime ?? current.get("startTime");
-    endTime = endTime ?? current.get("endTime");
-    stops = (stops && stops.length ? stops : current.get("stops")) ?? [];
-    isActive = isActive ?? current.get("isActive");
-
+    // Validaciones
     if (origin === destination) {
       throw new Error("La estación de origen y destino no pueden ser iguales");
     }
@@ -206,17 +187,22 @@ export async function updateRoute(
       );
     }
 
+    // Validar duplicados
     const checkQuery = `
       MATCH (r:Route {isActive: true})
-      OPTIONAL MATCH (r)-[:STARTS_AT]->(o:Station)
-      OPTIONAL MATCH (r)-[:ENDS_AT]->(d:Station)
+      MATCH (r)-[:STARTS_AT]->(o:Station)
+      MATCH (r)-[:ENDS_AT]->(d:Station)
       OPTIONAL MATCH (r)-[:STOPS_AT]->(s:Station)
-      WHERE o.name = $origin AND d.name = $destination AND r.startTime = $startTime AND r.endTime = $endTime AND r.id <> $id
-      WITH r, collect(s.name) AS existingStops
+      WHERE o.name = $origin 
+        AND d.name = $destination 
+        AND r.startTime = $startTime 
+        AND r.endTime = $endTime 
+        AND r.id <> $id
+      WITH collect(s.name) AS existingStops
       WHERE existingStops = $stops
-      RETURN r LIMIT 1
+      RETURN 1 LIMIT 1
     `;
-    const existing = await session.run(checkQuery, {
+    const duplicate = await session.run(checkQuery, {
       id,
       origin,
       destination,
@@ -224,32 +210,28 @@ export async function updateRoute(
       endTime,
       stops,
     });
-    if (existing.records.length > 0) {
+    if (duplicate.records.length > 0) {
       throw new Error("Ya existe una ruta idéntica activa");
     }
 
+    // Actualizar en un solo bloque
     const updateQuery = `
       MATCH (r:Route {id: $id})
       SET r.startTime = $startTime,
           r.endTime = $endTime,
-          r.isActive = $isActive
+          r.isActive = true
       WITH r
-      OPTIONAL MATCH (r)-[rel1:STARTS_AT]->(:Station)
-      DELETE rel1
+      OPTIONAL MATCH (r)-[rel:STARTS_AT|ENDS_AT|STOPS_AT]->(:Station)
+      DELETE rel
+      WITH r
       MERGE (o:Station {name: $origin, type: "origen"})
-      CREATE (r)-[:STARTS_AT]->(o)
-      WITH r
-      OPTIONAL MATCH (r)-[rel2:ENDS_AT]->(:Station)
-      DELETE rel2
       MERGE (d:Station {name: $destination, type: "destino"})
-      CREATE (r)-[:ENDS_AT]->(d)
-      WITH r
-      OPTIONAL MATCH (r)-[rel3:STOPS_AT]->(:Station)
-      DELETE rel3
+      MERGE (r)-[:STARTS_AT]->(o)
+      MERGE (r)-[:ENDS_AT]->(d)
       WITH r
       UNWIND $stops AS stopName
-        MERGE (s:Station {name: stopName, type: "intermedia"})
-        CREATE (r)-[:STOPS_AT]->(s)
+      MERGE (s:Station {name: stopName, type: "intermedia"})
+      MERGE (r)-[:STOPS_AT]->(s)
       RETURN r.id AS id,
              r.startTime AS startTime,
              r.endTime AS endTime,
@@ -266,8 +248,11 @@ export async function updateRoute(
       startTime,
       endTime,
       stops,
-      isActive,
     });
+
+    if (result.records.length === 0) {
+      return null;
+    }
 
     const record = result.records[0];
     return {

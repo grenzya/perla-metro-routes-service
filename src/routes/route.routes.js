@@ -70,22 +70,15 @@ router.get("/:id", async (req, res) => {
 /**
  * Actualizar una ruta por ID
  */
-router.patch("/:id", async (req, res) => {
+router.put("/:id", async (req, res) => {
   try {
-    const { origin, destination, startTime, endTime, stops, isActive } =
-      req.body;
+    const { origin, destination, startTime, endTime, stops } = req.body;
 
-    if (
-      !origin &&
-      !destination &&
-      !startTime &&
-      !endTime &&
-      !stops &&
-      isActive === undefined
-    ) {
-      return res
-        .status(400)
-        .json({ error: "No se proporcionaron campos para actualizar" });
+    if (!origin || !destination || !startTime || !endTime || !stops) {
+      return res.status(400).json({
+        error:
+          "Se deben proporcionar todos los campos: origin, destination, startTime, endTime y stops",
+      });
     }
 
     const updatedRoute = await editRoute(req.params.id, {
@@ -93,8 +86,7 @@ router.patch("/:id", async (req, res) => {
       destination,
       startTime,
       endTime,
-      stops: stops || [],
-      isActive: isActive ?? true,
+      stops,
     });
 
     if (!updatedRoute) {
