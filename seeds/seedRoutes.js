@@ -4,7 +4,7 @@ import { addRoute } from "../src/services/route.service.js";
 
 async function seedRoutes() {
   try {
-    const filePath = path.resolve("routes.json");
+    const filePath = path.resolve("./seeds/routes.json");
     const data = fs.readFileSync(filePath, "utf-8");
     const routes = JSON.parse(data);
 
