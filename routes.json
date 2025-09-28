@@ -1,0 +1,18 @@
+[
+  {
+    "origin": "Estación Sur de Chile",
+    "destination": "Plaza Norte",
+    "stops": ["Parque Central", "Estadio Municipal"],
+    "startTime": "08:00",
+    "endTime": "10:00",
+    "isActive": true
+  },
+  {
+    "origin": "Plaza Norte",
+    "destination": "Estación Sur de Chile",
+    "stops": ["Estadio Municipal", "Parque Central"],
+    "startTime": "11:00",
+    "endTime": "13:00",
+    "isActive": true
+  }
+]
