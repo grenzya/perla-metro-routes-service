@@ -26,12 +26,16 @@ Forma parte de una **arquitectura SOA** en la que cada dominio (Usuarios, Ticket
 
 ```bash
 src/
-├─ config/   # Configuración de Neo4j Aura y otras variables
-├─ models/   # Acceso a datos (queries Cypher a Neo4j)
-├─ services/ # Lógica de negocio
-├─ routes/   # Rutas de Express (controladores REST)
-├─ utils/    # Lógica de validación y helpers
-└─ index.js  # Punto de entrada del servidor Express
+├─ config/        # Configuración de Neo4j Aura y otras variables
+├─ models/        # Acceso a datos (queries Cypher a Neo4j)
+├─ services/      # Lógica de negocio
+├─ routes/        # Rutas de Express (controladores REST)
+├─ utils/         # Lógica de validación y helpers
+└─ index.js       # Punto de entrada del servidor Express
+
+seeds/
+├─ routes.json    # Datos de ejemplo para poblar la DB
+└─ seedRoutes.js  # Script para insertar datos en Neo4j
 ```
 
 ### Patrón utilizado
@@ -43,6 +47,7 @@ Se aplica **Arquitectura en Capas (Layered Architecture)**:
 - **services/**: lógica de negocio (validaciones, orquestación)
 - **routes/**: endpoints REST
 - **index.js**: inicialización del servidor
+- **seeds/**: scripts y datos de ejemplo para poblar la base de datos
 
 Esto separa responsabilidades, facilita pruebas y cumple con el principio SRP (Single Responsibility).
 
@@ -91,6 +96,16 @@ npm run dev
 
 ```bash
 npm start
+```
+
+## Seeders
+
+Para poblar la base de datos con rutas de ejemplo, se utiliza el script (`seedRoutes.js`) y el archivo (`routes.json`).  
+
+Ejectutar el seeder:
+
+```bash
+node seeds/seedRoutes.js
 ```
 
 ## Endpoints
