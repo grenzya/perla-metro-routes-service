@@ -1,11 +1,12 @@
-# 🚇 Perla Metro – Routes Service
+# Perla Metro – Routes Service
 
 Servicio REST encargado de gestionar **Rutas** del sistema Perla Metro.  
 Implementado en **Node.js + Express** con base de datos **Neo4j Aura**.
+Desplegado en Render: https://perla-metro-routes-service-ksk5.onrender.com
 
 ---
 
-## 📋 Descripción
+## Descripción
 
 Este servicio expone una API REST para la gestión de rutas del metro.  
 Cada ruta tiene:
@@ -21,16 +22,16 @@ Forma parte de una **arquitectura SOA** en la que cada dominio (Usuarios, Ticket
 
 ---
 
-## 🗂️ Estructura del proyecto
+## Estructura del proyecto
 
 ```bash
 src/
-├─ config/ # Configuración de Neo4j Aura y otras variables
-├─ models/ # Acceso a datos (queries Cypher a Neo4j)
+├─ config/   # Configuración de Neo4j Aura y otras variables
+├─ models/   # Acceso a datos (queries Cypher a Neo4j)
 ├─ services/ # Lógica de negocio
-├─ routes/ # Rutas de Express (controladores REST)
-├─ utils/ # Lógica de validación y helpers
-└─ index.js # Punto de entrada del servidor Express
+├─ routes/   # Rutas de Express (controladores REST)
+├─ utils/    # Lógica de validación y helpers
+└─ index.js  # Punto de entrada del servidor Express
 ```
 
 ### Patrón utilizado
@@ -47,7 +48,7 @@ Esto separa responsabilidades, facilita pruebas y cumple con el principio SRP (S
 
 ---
 
-## 🛠️ Instalación
+## Instalación
 
 1. Clonar el repositorio:
 
@@ -62,4 +63,53 @@ cd perla-metro-routes-service
 npm install
 ```
 
-3. Crear archivo (`.env`) con tus credenciales
+3. Copiar el archivo de ejemplo (`.env.example`) a (`.env`)
+
+```bash
+cp .env.example .env
+```
+
+4. Editar (`.env`) y completar tus credenciales de Neo4j:
+   
+```bash
+PORT=4000
+NEO4J_URI=neo4j+s://<tu-cluster>.databases.neo4j.io
+NEO4J_USER=neo4j
+NEO4J_PASSWORD=<tu-password>
+NEO4J_DATABASE=neo4j
+```
+
+5. Ejectutar el proyecto
+
+* En desarrollo:
+
+```bash
+npm run dev
+```
+
+* En producción:
+
+```bash
+npm start
+```
+
+## Endpoints
+
+```bash
+| Método | Ruta          | Descripción                        |
+|--------|---------------|------------------------------------|
+| GET    | /routes       | Obtener todas las rutas            |
+| GET    | /routes/:id   | Obtener una ruta por ID            |
+| POST   | /routes       | Crear una nueva ruta               |
+| PUT    | /routes/:id   | Actualizar una ruta existente      |
+| DELETE | /routes/:id   | Eliminar (soft delete) una ruta    |
+```
+
+## Tecnologías
+
+* Node.js
+* Express
+* Neo4j Aura
+* UUID
+* Nodemon (solo desarrollo)
+* Dotenv
