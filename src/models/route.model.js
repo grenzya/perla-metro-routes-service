@@ -1,6 +1,8 @@
 import { driver } from "../config/db.js";
 import { v4 as uuidv4 } from "uuid";
-import { isValidTimeFormat } from "../utils/time.utils.js";
+import dotenv from "dotenv";
+import axios from "axios";
+dotenv.config();
 
 /**
  * Crea una nueva ruta en la base de datos
@@ -8,56 +10,77 @@ import { isValidTimeFormat } from "../utils/time.utils.js";
  * @returns La ruta creada
  */
 export async function createRoute({
-  origin,
-  destination,
-  stops = [],
+  originId,
+  destinationId,
+  stopsIds = [],
   startTime,
   endTime,
   isActive,
 }) {
-  if (!isValidTimeFormat(startTime) || !isValidTimeFormat(endTime)) {
-    throw new Error(
-      "Los horarios deben estar en formato HH:mm entre 00:00 y 23:59"
-    );
-  }
-
-  if (origin === destination) {
-    throw new Error("La estación de origen y destino no pueden ser iguales");
-  }
-
+  // validar horarios
   if (startTime >= endTime) {
     throw new Error(
       "El horario de inicio debe ser menor que el horario de término"
     );
   }
 
+  // validar estaciones en el otro servicio
+  const originStation = await axios
+    .get(`${process.env.STATIONS_SERVICE_URL}/${originId}`)
+    .then((r) => r.data)
+    .catch(() => null);
+  const destinationStation = await axios
+    .get(`${process.env.STATIONS_SERVICE_URL}/${destinationId}`)
+    .then((r) => r.data)
+    .catch(() => null);
+
+  console.log("Origin station:", originStation);
+  console.log("Destination station:", destinationStation);
+
+  if (!originStation || !destinationStation) {
+    throw new Error("La estación de origen o destino no existe");
+  }
+  if (originStation.id === destinationStation.id) {
+    throw new Error("La estación de origen y destino no pueden ser iguales");
+  }
+
+  // validar stops
+  const stopsStations = [];
+  for (const stopId of stopsIds) {
+    const stopStation = await axios
+      .get(`${process.env.STATIONS_SERVICE_URL}/${stopId}`)
+      .then((r) => r.data)
+      .catch(() => null);
+    if (!stopStation)
+      throw new Error(`La estación intermedia ${stopId} no existe`);
+    stopsStations.push(stopStation);
+  }
+
   const session = driver.session();
   const routeId = uuidv4();
 
   try {
+    // comprobar duplicados en Neo4j
     const checkQuery = `
       MATCH (r:Route {isActive: true})
       OPTIONAL MATCH (r)-[:STARTS_AT]->(o:Station)
       OPTIONAL MATCH (r)-[:ENDS_AT]->(d:Station)
       OPTIONAL MATCH (r)-[:STOPS_AT]->(s:Station)
-      WHERE o.name = $origin AND d.name = $destination
-      WITH r, collect(s.name) AS existingStops
-      WHERE existingStops = $stops
+      WHERE o.id = $originId AND d.id = $destinationId
+      WITH r, collect(s.id) AS existingStops
+      WHERE existingStops = $stopsIds
       RETURN r LIMIT 1
     `;
-
     const existing = await session.run(checkQuery, {
-      origin,
-      destination,
-      startTime,
-      endTime,
-      stops,
+      originId,
+      destinationId,
+      stopsIds,
     });
-
     if (existing.records.length > 0) {
       throw new Error("Ya existe una ruta idéntica activa");
     }
 
+    // crear ruta en Neo4j usando IDs y nombres de las estaciones
     const query = `
       CREATE (r:Route {
         id: $routeId,
@@ -65,26 +88,37 @@ export async function createRoute({
         endTime: $endTime,
         isActive: $isActive
       })
-      MERGE (o:Station {name: $origin, type: "origen"})
-      MERGE (d:Station {name: $destination, type: "destino"})
+      MERGE (o:Station {id: $originId})
+      ON CREATE SET o.name = $originName, o.type = "origen"
+      MERGE (d:Station {id: $destinationId})
+      ON CREATE SET d.name = $destinationName, d.type = "destino"
       CREATE (r)-[:STARTS_AT]->(o)
       CREATE (r)-[:ENDS_AT]->(d)
-      WITH r
-      UNWIND $stops AS stopName
-        MERGE (s:Station {name: stopName, type: "intermedia"})
-        CREATE (r)-[:STOPS_AT]->(s)
-      RETURN r {.*, origin: $origin, destination: $destination, stops: $stops } AS route
+      WITH r, $originName AS originName, $destinationName AS destinationName, $stops AS stops
+      FOREACH (stopData IN stops |
+      MERGE (s:Station {id: stopData.id})
+      ON CREATE SET s.name = stopData.name, s.type = "intermedia"
+      CREATE (r)-[:STOPS_AT]->(s)
+      )
+      RETURN r {.*, origin: originName, destination: destinationName, stops: [stop IN stops | stop.name]} AS route
     `;
 
     const result = await session.run(query, {
       routeId,
-      origin,
-      destination,
-      stops,
       startTime,
       endTime,
       isActive,
+      originId: originStation.id,
+      originName: originStation.name,
+      destinationId: destinationStation.id,
+      destinationName: destinationStation.name,
+      stops: stopsStations.map((s) => ({ id: s.id, name: s.name })) || [],
+      stopsIds: stopsStations.map((s) => s.id) || [],
     });
+
+    if (result.records.length === 0) {
+      throw new Error("No se pudo crear la ruta en Neo4j");
+    }
 
     return result.records[0].get("route");
   } finally {
@@ -173,97 +207,104 @@ export async function getRouteById(id) {
  */
 export async function updateRoute(
   id,
-  { origin, destination, startTime, endTime, stops }
+  { originId, destinationId, stopsIds = [], startTime, endTime }
 ) {
   const session = driver.session();
+
   try {
-    // Validaciones
-    if (origin === destination) {
-      throw new Error("La estación de origen y destino no pueden ser iguales");
-    }
-    if (startTime >= endTime) {
-      throw new Error(
-        "El horario de inicio debe ser menor que el horario de término"
-      );
-    }
+    console.log("🔍 Buscando ruta con id:", id);
 
-    // Validar duplicados
-    const checkQuery = `
-      MATCH (r:Route {isActive: true})
-      MATCH (r)-[:STARTS_AT]->(o:Station)
-      MATCH (r)-[:ENDS_AT]->(d:Station)
-      OPTIONAL MATCH (r)-[:STOPS_AT]->(s:Station)
-      WHERE o.name = $origin 
-        AND d.name = $destination 
-        AND r.startTime = $startTime 
-        AND r.endTime = $endTime 
-        AND r.id <> $id
-      WITH collect(s.name) AS existingStops
-      WHERE existingStops = $stops
-      RETURN 1 LIMIT 1
-    `;
-    const duplicate = await session.run(checkQuery, {
-      id,
-      origin,
-      destination,
-      startTime,
-      endTime,
-      stops,
-    });
-    if (duplicate.records.length > 0) {
-      throw new Error("Ya existe una ruta idéntica activa");
-    }
+    // Verificar si la ruta existe
+    const check = await session.run(
+      `MATCH (r:Route {id: $id}) RETURN r LIMIT 1`,
+      { id }
+    );
 
-    // Actualizar en un solo bloque
-    const updateQuery = `
-      MATCH (r:Route {id: $id})
-      SET r.startTime = $startTime,
-          r.endTime = $endTime,
-          r.isActive = true
-      WITH r
-      OPTIONAL MATCH (r)-[rel:STARTS_AT|ENDS_AT|STOPS_AT]->(:Station)
-      DELETE rel
-      WITH r
-      MERGE (o:Station {name: $origin, type: "origen"})
-      MERGE (d:Station {name: $destination, type: "destino"})
-      MERGE (r)-[:STARTS_AT]->(o)
-      MERGE (r)-[:ENDS_AT]->(d)
-      WITH r
-      UNWIND $stops AS stopName
-      MERGE (s:Station {name: stopName, type: "intermedia"})
-      MERGE (r)-[:STOPS_AT]->(s)
-      RETURN r.id AS id,
-             r.startTime AS startTime,
-             r.endTime AS endTime,
-             r.isActive AS isActive,
-             $origin AS origin,
-             $destination AS destination,
-             $stops AS stops
-    `;
-
-    const result = await session.run(updateQuery, {
-      id,
-      origin,
-      destination,
-      startTime,
-      endTime,
-      stops,
-    });
-
-    if (result.records.length === 0) {
+    if (check.records.length === 0) {
+      console.log("❌ No se encontró ninguna ruta con ese id");
       return null;
     }
 
-    const record = result.records[0];
-    return {
-      id: record.get("id"),
-      origin: record.get("origin"),
-      destination: record.get("destination"),
-      startTime: record.get("startTime"),
-      endTime: record.get("endTime"),
-      stops: record.get("stops"),
-      isActive: record.get("isActive"),
-    };
+    console.log("✅ Ruta encontrada, procediendo a actualizar...");
+
+    // Validar estaciones desde el servicio externo
+    const originStation = await axios
+      .get(`${process.env.STATIONS_SERVICE_URL}/${originId}`)
+      .then((r) => r.data)
+      .catch(() => null);
+
+    const destinationStation = await axios
+      .get(`${process.env.STATIONS_SERVICE_URL}/${destinationId}`)
+      .then((r) => r.data)
+      .catch(() => null);
+
+    if (!originStation || !destinationStation) {
+      throw new Error("La estación de origen o destino no existe");
+    }
+
+    if (originStation.id === destinationStation.id) {
+      throw new Error("La estación de origen y destino no pueden ser iguales");
+    }
+
+    // Validar stops
+    const stopsStations = [];
+    for (const stopId of stopsIds) {
+      const stopStation = await axios
+        .get(`${process.env.STATIONS_SERVICE_URL}/${stopId}`)
+        .then((r) => r.data)
+        .catch(() => null);
+
+      if (!stopStation) {
+        throw new Error(`La estación intermedia ${stopId} no existe`);
+      }
+
+      stopsStations.push(stopStation);
+    }
+
+    // Query de actualización
+    const query = `
+      MATCH (r:Route {id: $id})
+      SET r.startTime = $startTime,
+          r.endTime = $endTime
+      WITH r
+      MATCH (o:Station {id: $originId})
+      MATCH (d:Station {id: $destinationId})
+      MERGE (r)-[:STARTS_AT]->(o)
+      MERGE (r)-[:ENDS_AT]->(d)
+      WITH r
+      OPTIONAL MATCH (r)-[rel:STOPS_AT]->(:Station)
+      DELETE rel
+      WITH r
+      FOREACH (stopData IN $stops |
+        MERGE (s:Station {id: stopData.id})
+          ON CREATE SET s.name = stopData.name, s.type = "intermedia"
+        CREATE (r)-[:STOPS_AT]->(s)
+      )
+      RETURN r {
+        .*, 
+        origin: $originName, 
+        destination: $destinationName, 
+        stops: [stop IN $stops | stop.name]
+      } AS route
+    `;
+
+    const result = await session.run(query, {
+      id,
+      startTime,
+      endTime,
+      originId: originStation.id,
+      originName: originStation.name,
+      destinationId: destinationStation.id,
+      destinationName: destinationStation.name,
+      stops: stopsStations.map((s) => ({ id: s.id, name: s.name })),
+    });
+
+    if (result.records.length === 0) {
+      console.log("⚠️ No se pudo actualizar la ruta (sin resultados en Neo4j)");
+      return null;
+    }
+
+    return result.records[0].get("route");
   } finally {
     await session.close();
   }

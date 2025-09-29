@@ -14,17 +14,17 @@ const router = express.Router();
  */
 router.post("/", async (req, res) => {
   try {
-    const { origin, destination, stops, startTime, endTime, isActive } =
+    const { originId, destinationId, stopsIds, startTime, endTime, isActive } =
       req.body;
 
-    if (!origin || !destination || !startTime || !endTime) {
+    if (!originId || !destinationId || !startTime || !endTime) {
       return res.status(400).json({ error: "Faltan campos obligatorios" });
     }
 
     const newRoute = await addRoute({
-      origin,
-      destination,
-      stops,
+      originId,
+      destinationId,
+      stopsIds: stopsIds || [],
       startTime,
       endTime,
       isActive: isActive ?? true,
@@ -72,21 +72,21 @@ router.get("/:id", async (req, res) => {
  */
 router.put("/:id", async (req, res) => {
   try {
-    const { origin, destination, startTime, endTime, stops } = req.body;
+    const { originId, destinationId, startTime, endTime, stopsIds } = req.body;
 
-    if (!origin || !destination || !startTime || !endTime || !stops) {
+    if (!originId || !destinationId || !startTime || !endTime || !stopsIds) {
       return res.status(400).json({
         error:
-          "Se deben proporcionar todos los campos: origin, destination, startTime, endTime y stops",
+          "Se deben proporcionar todos los campos: originId, destinationId, startTime, endTime y stopsIds",
       });
     }
 
     const updatedRoute = await editRoute(req.params.id, {
-      origin,
-      destination,
+      originId,
+      destinationId,
       startTime,
       endTime,
-      stops,
+      stopsIds,
     });
 
     if (!updatedRoute) {
