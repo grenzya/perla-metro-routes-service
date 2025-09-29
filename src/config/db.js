@@ -4,7 +4,7 @@ import dotenv from "dotenv";
 dotenv.config();
 
 /**
- * Neo4j Driver Instance
+ * Configuración de la conexión a la base de datos Neo4j
  */
 export const driver = neo4j.driver(
   process.env.NEO4J_URI,

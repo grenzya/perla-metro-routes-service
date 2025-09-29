@@ -37,7 +37,7 @@ router.post("/", async (req, res) => {
 });
 
 /**
- * Listar todas las rutas que son activas q por ahora es in middleware para probar xd
+ * Listar todas las rutas
  */
 router.get("/", async (req, res) => {
   try {
