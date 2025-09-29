@@ -1,18 +1,18 @@
 [
   {
-    "origin": "Estación Sur de Chile",
-    "destination": "Plaza Norte",
-    "stops": ["Parque Central", "Estadio Municipal"],
+    "originId": "fc01bc2b-6b36-4682-979b-346a6cbf3084",
+    "destinationId": "3912c1ca-a833-4dda-b990-a9709f9fc096",
+    "stopsIds": ["bed8cfb2-62c8-4c03-a071-fbeae15d18a5"],
     "startTime": "08:00",
-    "endTime": "10:00",
+    "endTime": "12:00",
     "isActive": true
-  },
+},
   {
-    "origin": "Plaza Norte",
-    "destination": "Estación Sur de Chile",
-    "stops": ["Estadio Municipal", "Parque Central"],
-    "startTime": "11:00",
-    "endTime": "13:00",
+    "originId": "3912c1ca-a833-4dda-b990-a9709f9fc096",
+    "destinationId": "fc01bc2b-6b36-4682-979b-346a6cbf3084",
+    "stopsIds": ["bed8cfb2-62c8-4c03-a071-fbeae15d18a5"],
+    "startTime": "08:00",
+    "endTime": "12:00",
     "isActive": true
-  }
+}
 ]
